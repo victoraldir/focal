@@ -51,32 +51,38 @@ changelog:
       - "^chore:"
 
 # Automatically generate and push a Homebrew formula to the tap repository.
-brews:
+# Generate and push a Homebrew Cask to the tap repository. Casks are the
+# non-deprecated GoReleaser path for distributing pre-built binaries (the older
+# `brews`/formula generator is deprecated).
+homebrew_casks:
   - name: focal
-    # Target tap repository. The release job pushes the generated formula here.
+    binaries:
+      - focal
+    directory: Casks
+    homepage: "https://github.com/victoraldir/focal"
+    description: "Convert photo sequences into timelapses by wrapping FFmpeg"
+    # focal downloads its own static FFmpeg on first use, so ffmpeg is not a
+    # hard dependency; this note tells users where that binary lands.
+    caveats: |
+      focal wraps FFmpeg. If ffmpeg is not already on your PATH, focal downloads
+      a static build into ~/Library/Caches/focal/bin on first use.
+    # Target tap repository. The release job pushes the generated cask here.
     repository:
       owner: victoraldir
       name: homebrew-tap
       branch: main
-      # HOMEBREW_TAP_TOKEN is a PAT with `repo` scope on the tap repo,
+      # HOMEBREW_TAP_TOKEN is a PAT with write access to the tap repo,
       # provided by the GitHub Actions workflow.
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
-    homepage: "https://github.com/victoraldir/focal"
-    description: "Convert photo sequences into timelapses by wrapping FFmpeg"
-    license: "MIT"
-    # Commit author for the formula bump in the tap repo.
     commit_author:
       name: goreleaserbot
       email: goreleaserbot@users.noreply.github.com
-    commit_msg_template: "brew: focal {{ .Tag }}"
-    # focal downloads a static FFmpeg build on first use, so ffmpeg is an
-    # optional (not required) dependency here.
-    dependencies:
-      - name: ffmpeg
-        type: optional
-    # Smoke test that Homebrew runs after installation.
-    test: |
-      system "#{bin}/focal", "--version"
-    install: |
-      bin.install "focal"
+    commit_msg_template: "brew cask: focal {{ .Tag }}"
+    # The release binary is unsigned, so strip the quarantine attribute Gatekeeper
+    # would otherwise apply, letting `focal` run without a security prompt.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/focal"]
+          end

@@ -32,7 +32,7 @@ focal lapse -i ./photos -o timelapse.mp4 -f 24
 
 ```bash
 brew tap victoraldir/tap
-brew install focal
+brew install --cask focal
 ```
 
 ### From source

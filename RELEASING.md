@@ -5,7 +5,7 @@ Releases are cut by pushing a semver tag. A GitHub Actions workflow
 
 1. Builds `darwin/arm64` and `darwin/amd64` binaries.
 2. Creates a GitHub Release with the archives and `checksums.txt`.
-3. Generates a Homebrew formula and pushes it to the tap repository.
+3. Generates a Homebrew **cask** and pushes it to the tap repository.
 
 ## One-time setup
 
@@ -19,11 +19,11 @@ github.com/victoraldir/homebrew-tap
 
 The `homebrew-` prefix is what lets users run `brew tap victoraldir/tap`
 (Homebrew strips the prefix). It can start empty — GoReleaser creates the
-`Formula/` directory and `focal.rb` on the first release.
+`Casks/` directory and `focal.rb` on the first release.
 
 ### 2. Create a Personal Access Token (PAT) for the tap
 
-GoReleaser needs to push the formula to a *different* repo than the one it's
+GoReleaser needs to push the cask to a *different* repo than the one it's
 releasing, so the default `GITHUB_TOKEN` isn't enough.
 
 - **Classic PAT:** create one with the `repo` scope.
@@ -55,13 +55,13 @@ git push origin v0.1.0
 Watch the run under the repo's **Actions** tab. On success you'll have:
 
 - A GitHub Release at `focal/releases/tag/v0.1.0` with macOS archives.
-- An updated `Formula/focal.rb` committed to `homebrew-tap`.
+- An updated `Casks/focal.rb` committed to `homebrew-tap`.
 
 Users can then install:
 
 ```bash
 brew tap victoraldir/tap
-brew install focal
+brew install --cask focal
 ```
 
 Or upgrade:
