@@ -61,12 +61,14 @@ func (e *Engine) Encode(ctx context.Context, req domain.EncodeRequest, out io.Wr
 //	-progress pipe:1        emit machine-readable progress on stdout
 //	-f concat -safe 0       read the concat demuxer, allowing absolute paths
 //	-i <concat file>        the generated frame list
-//	-vf <pad filter>        enforce even dimensions
+//	-vf <filter>            optional downscale + even-dimension pad
 //	-r <fps>                output frame rate
+//	-fps_mode cfr           force constant frame rate (no dup/drop jitter)
+//	-frames:v <n>           write exactly one frame per source image
 //	-pix_fmt yuv420p        broadly compatible pixel format
 //	<output>                destination file
 func BuildArgs(req domain.EncodeRequest) []string {
-	return []string{
+	args := []string{
 		"-y",
 		"-hide_banner",
 		"-nostats",
@@ -74,9 +76,25 @@ func BuildArgs(req domain.EncodeRequest) []string {
 		"-f", "concat",
 		"-safe", "0",
 		"-i", req.ConcatFilePath,
-		"-vf", padFilter,
+		"-vf", videoFilter(req.ScaleHeight),
 		"-r", fmt.Sprintf("%d", req.FPS),
-		"-pix_fmt", "yuv420p",
-		req.OutputPath,
+		"-fps_mode", "cfr",
 	}
+	// Bound the output to exactly one frame per source image, trimming the extra
+	// frames the concat demuxer's repeated last entry would otherwise emit.
+	if req.TotalFrames > 0 {
+		args = append(args, "-frames:v", fmt.Sprintf("%d", req.TotalFrames))
+	}
+	args = append(args, "-pix_fmt", "yuv420p", req.OutputPath)
+	return args
+}
+
+// videoFilter builds the -vf graph. It always enforces even dimensions; when
+// scaleHeight is positive it first downscales to that height, letting the width
+// fall out to the nearest even number (-2) so the aspect ratio is preserved.
+func videoFilter(scaleHeight int) string {
+	if scaleHeight > 0 {
+		return fmt.Sprintf("scale=-2:%d,%s", scaleHeight, padFilter)
+	}
+	return padFilter
 }

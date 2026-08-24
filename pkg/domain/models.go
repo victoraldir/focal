@@ -41,6 +41,13 @@ type LapseRequest struct {
 	OutputPath string
 	// FPS is the target output frame rate.
 	FPS int
+	// MaxHeight caps the output height in pixels: if the source is taller, the
+	// video is scaled down (preserving aspect) to this height so it stays within
+	// the limits of hardware H.264 decoders and plays back smoothly. Full-sensor
+	// stills (e.g. 6000x3376) otherwise produce 6K video that no hardware decoder
+	// can play, which manifests as stutter/flicker. Zero disables the cap and
+	// keeps the source resolution. The source is never upscaled.
+	MaxHeight int
 }
 
 // Validate returns an error if the request is missing required fields or holds
@@ -55,7 +62,38 @@ func (r LapseRequest) Validate() error {
 	if r.FPS <= 0 {
 		return fmt.Errorf("fps must be a positive integer, got %d", r.FPS)
 	}
+	if r.MaxHeight < 0 {
+		return fmt.Errorf("max-height cannot be negative, got %d", r.MaxHeight)
+	}
 	return nil
+}
+
+// TargetHeight resolves the output height for a source of srcHeight pixels under
+// this request's MaxHeight cap. It returns 0 when no scaling is needed (the cap
+// is disabled, or the source already fits), and otherwise the capped height
+// rounded down to an even number (H.264/yuv420p requires even dimensions). The
+// source is never upscaled.
+func (r LapseRequest) TargetHeight(srcHeight int) int {
+	if r.MaxHeight <= 0 || srcHeight <= r.MaxHeight {
+		return 0
+	}
+	h := r.MaxHeight
+	if h%2 != 0 {
+		h--
+	}
+	return h
+}
+
+// maxImageHeight returns the greatest pixel height across the sequence, which is
+// what the output-sizing cap is measured against.
+func maxImageHeight(images []Image) int {
+	max := 0
+	for _, img := range images {
+		if img.Height > max {
+			max = img.Height
+		}
+	}
+	return max
 }
 
 // AspectRatioVaries reports whether the aspect ratios across the sequence differ

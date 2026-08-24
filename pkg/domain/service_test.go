@@ -108,6 +108,38 @@ func TestCreate_HappyPath(t *testing.T) {
 	}
 }
 
+func TestCreate_CapsOversizedOutput(t *testing.T) {
+	encoder := &spyEncoder{}
+	ts := domain.NewTimelapser(
+		stubScanner{images: []domain.Image{img(6000, 3376, time.Now())}}, // 6K source
+		stubResolver{path: "ffmpeg"},
+		&spyConcat{}, encoder, &recordLogger{},
+	)
+	req := domain.LapseRequest{InputDir: "in", OutputPath: "o.mp4", FPS: 30, MaxHeight: 2160}
+	if err := ts.Create(context.Background(), req, io.Discard); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if encoder.gotReq.ScaleHeight != 2160 {
+		t.Errorf("expected output scaled to 2160, got ScaleHeight=%d", encoder.gotReq.ScaleHeight)
+	}
+}
+
+func TestCreate_NoScaleWhenSourceFits(t *testing.T) {
+	encoder := &spyEncoder{}
+	ts := domain.NewTimelapser(
+		stubScanner{images: []domain.Image{img(1920, 1080, time.Now())}},
+		stubResolver{path: "ffmpeg"},
+		&spyConcat{}, encoder, &recordLogger{},
+	)
+	req := domain.LapseRequest{InputDir: "in", OutputPath: "o.mp4", FPS: 30, MaxHeight: 2160}
+	if err := ts.Create(context.Background(), req, io.Discard); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if encoder.gotReq.ScaleHeight != 0 {
+		t.Errorf("1080p source under a 2160 cap should not scale, got ScaleHeight=%d", encoder.gotReq.ScaleHeight)
+	}
+}
+
 func TestCreate_NoImages(t *testing.T) {
 	ts := domain.NewTimelapser(
 		stubScanner{images: nil},

@@ -44,8 +44,13 @@ type EncodeRequest struct {
 	OutputPath     string
 	FPS            int
 	// TotalFrames is the number of source images. It lets the encoder render a
-	// determinate progress bar (frames done / total) rather than a spinner.
+	// determinate progress bar (frames done / total) rather than a spinner, and
+	// bounds the output to exactly this many frames.
 	TotalFrames int
+	// ScaleHeight, when greater than zero, is the height the output is scaled to
+	// (preserving aspect ratio, width auto-adjusted to an even number). Zero
+	// keeps the source resolution.
+	ScaleHeight int
 }
 
 // Encoder turns a prepared concat file into an output video. It owns FFmpeg

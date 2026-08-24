@@ -18,12 +18,37 @@ func TestLapseRequest_Validate(t *testing.T) {
 		{"missing output", domain.LapseRequest{InputDir: "in", FPS: 30}, true},
 		{"zero fps", domain.LapseRequest{InputDir: "in", OutputPath: "o.mp4", FPS: 0}, true},
 		{"negative fps", domain.LapseRequest{InputDir: "in", OutputPath: "o.mp4", FPS: -5}, true},
+		{"negative max-height", domain.LapseRequest{InputDir: "in", OutputPath: "o.mp4", FPS: 30, MaxHeight: -1}, true},
+		{"zero max-height is valid (no cap)", domain.LapseRequest{InputDir: "in", OutputPath: "o.mp4", FPS: 30, MaxHeight: 0}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.req.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLapseRequest_TargetHeight(t *testing.T) {
+	tests := []struct {
+		name      string
+		maxHeight int
+		srcHeight int
+		want      int
+	}{
+		{"cap disabled", 0, 3376, 0},
+		{"source fits under cap", 2160, 1080, 0},
+		{"source equals cap", 2160, 2160, 0},
+		{"source exceeds cap -> scale down", 2160, 3376, 2160},
+		{"odd cap rounded down to even", 1081, 3376, 1080},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := domain.LapseRequest{MaxHeight: tt.maxHeight}
+			if got := r.TargetHeight(tt.srcHeight); got != tt.want {
+				t.Errorf("TargetHeight(%d) with cap %d = %d, want %d", tt.srcHeight, tt.maxHeight, got, tt.want)
 			}
 		})
 	}

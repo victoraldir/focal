@@ -41,6 +41,7 @@ func TestBuildArgs_Shape(t *testing.T) {
 		ConcatFilePath: "/tmp/list.txt",
 		OutputPath:     "out.mp4",
 		FPS:            24,
+		TotalFrames:    100,
 	})
 	joined := strings.Join(args, " ")
 
@@ -48,6 +49,7 @@ func TestBuildArgs_Shape(t *testing.T) {
 		"-f concat", "-safe 0", "-i /tmp/list.txt",
 		"-pix_fmt yuv420p", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
 		"-r 24", "-progress pipe:1", "-nostats",
+		"-fps_mode cfr", "-frames:v 100",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("args %q missing %q", joined, want)
@@ -55,6 +57,34 @@ func TestBuildArgs_Shape(t *testing.T) {
 	}
 	if args[len(args)-1] != "out.mp4" {
 		t.Errorf("output must be the last argument, got %q", args[len(args)-1])
+	}
+}
+
+func TestBuildArgs_ScaleFilter(t *testing.T) {
+	// No scale requested: filter is pad-only.
+	plain := strings.Join(ffmpeg.BuildArgs(domain.EncodeRequest{FPS: 30}), " ")
+	if strings.Contains(plain, "scale=") {
+		t.Errorf("did not expect a scale filter when ScaleHeight is 0: %q", plain)
+	}
+
+	// Scale requested: downscale to height with even auto width, then pad.
+	scaled := ffmpeg.BuildArgs(domain.EncodeRequest{FPS: 30, ScaleHeight: 2160})
+	var vf string
+	for i, a := range scaled {
+		if a == "-vf" && i+1 < len(scaled) {
+			vf = scaled[i+1]
+		}
+	}
+	if vf != "scale=-2:2160,pad=ceil(iw/2)*2:ceil(ih/2)*2" {
+		t.Errorf("unexpected -vf value: %q", vf)
+	}
+}
+
+func TestBuildArgs_NoFramesLimitWhenUnknown(t *testing.T) {
+	// TotalFrames 0 (unknown) must not emit a -frames:v cap.
+	args := strings.Join(ffmpeg.BuildArgs(domain.EncodeRequest{FPS: 30}), " ")
+	if strings.Contains(args, "-frames:v") {
+		t.Errorf("should not cap frames when TotalFrames is 0: %q", args)
 	}
 }
 

@@ -59,6 +59,13 @@ func (t *Timelapser) Create(ctx context.Context, req LapseRequest, progress io.W
 		)
 	}
 
+	// Resolve output sizing: cap oversized sources so the result stays within
+	// hardware-decoder limits and plays back smoothly.
+	scaleHeight := req.TargetHeight(maxImageHeight(images))
+	if scaleHeight > 0 {
+		t.Log.Infof("Scaling output to %dp for smooth playback (source exceeds the %dp cap)", scaleHeight, req.MaxHeight)
+	}
+
 	ffmpegPath, err := t.Resolver.Resolve(ctx)
 	if err != nil {
 		return fmt.Errorf("resolving ffmpeg: %w", err)
@@ -84,6 +91,7 @@ func (t *Timelapser) Create(ctx context.Context, req LapseRequest, progress io.W
 		OutputPath:     req.OutputPath,
 		FPS:            req.FPS,
 		TotalFrames:    len(images),
+		ScaleHeight:    scaleHeight,
 	}
 	if err := t.Encoder.Encode(ctx, encReq, progress); err != nil {
 		return fmt.Errorf("encoding video: %w", err)
