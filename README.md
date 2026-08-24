@@ -1,5 +1,7 @@
 # focal
 
+**🎬 [Website & docs → victoraldir.github.io/focal](https://victoraldir.github.io/focal/)**
+
 `focal` is a small, modular CLI that turns a directory of photos into a
 timelapse video by wrapping [FFmpeg](https://ffmpeg.org/). It orders frames
 chronologically from EXIF metadata, warns about inconsistent aspect ratios, and
