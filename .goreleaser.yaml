@@ -51,6 +51,12 @@ changelog:
       - "^chore:"
 
 # Automatically generate and push a Homebrew formula to the tap repository.
+# Make re-running a release for an existing tag idempotent: replace same-named
+# assets instead of failing with "already_exists" (422). Without this, a partial
+# or repeated release run collides with the assets already on the GitHub release.
+release:
+  mode: replace
+
 # Generate and push a Homebrew Cask to the tap repository. Casks are the
 # non-deprecated GoReleaser path for distributing pre-built binaries (the older
 # `brews`/formula generator is deprecated).
