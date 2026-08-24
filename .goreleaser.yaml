@@ -1,0 +1,80 @@
+# GoReleaser configuration (schema v2) for focal.
+# Docs: https://goreleaser.com
+#
+# Local validation:  goreleaser check
+# Local dry run:     goreleaser release --snapshot --clean
+version: 2
+
+project_name: focal
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: focal
+    main: .
+    binary: focal
+    env:
+      - CGO_ENABLED=0
+    # macOS-first: build both Apple Silicon and Intel targets.
+    goos:
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+    # Embed the release version into cmd/focal.version.
+    ldflags:
+      - -s -w
+      - -X github.com/victoraldir/focal/cmd/focal.version={{ .Version }}
+
+archives:
+  - id: focal
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Automatically generate and push a Homebrew formula to the tap repository.
+brews:
+  - name: focal
+    # Target tap repository. The release job pushes the generated formula here.
+    repository:
+      owner: victoraldir
+      name: homebrew-tap
+      branch: main
+      # HOMEBREW_TAP_TOKEN is a PAT with `repo` scope on the tap repo,
+      # provided by the GitHub Actions workflow.
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/victoraldir/focal"
+    description: "Convert photo sequences into timelapses by wrapping FFmpeg"
+    license: "MIT"
+    # Commit author for the formula bump in the tap repo.
+    commit_author:
+      name: goreleaserbot
+      email: goreleaserbot@users.noreply.github.com
+    commit_msg_template: "brew: focal {{ .Tag }}"
+    # focal downloads a static FFmpeg build on first use, so ffmpeg is an
+    # optional (not required) dependency here.
+    dependencies:
+      - name: ffmpeg
+        type: optional
+    # Smoke test that Homebrew runs after installation.
+    test: |
+      system "#{bin}/focal", "--version"
+    install: |
+      bin.install "focal"

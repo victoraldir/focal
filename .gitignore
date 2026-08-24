@@ -1,0 +1,18 @@
+# Binaries
+/focal
+/dist/
+*.exe
+*.test
+
+# Output artifacts
+*.mp4
+*.mov
+
+# Go
+*.out
+coverage.txt
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
