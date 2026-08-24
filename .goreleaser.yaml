@@ -24,10 +24,12 @@ builds:
     goarch:
       - arm64
       - amd64
-    # Embed the release version into cmd/focal.version.
+    # Embed release metadata into the cmd/focal package for `focal version`.
     ldflags:
       - -s -w
       - -X github.com/victoraldir/focal/cmd/focal.version={{ .Version }}
+      - -X github.com/victoraldir/focal/cmd/focal.commit={{ .Commit }}
+      - -X github.com/victoraldir/focal/cmd/focal.date={{ .Date }}
 
 archives:
   - id: focal

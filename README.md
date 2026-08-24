@@ -17,7 +17,11 @@ focal lapse -i ./photos -o timelapse.mp4 -f 24
 - **Aspect-ratio guard** — warns when the sequence mixes orientations, and pads
   output to even dimensions (`yuv420p`-safe) so any source resolution encodes.
 - **Zero-dependency on macOS** — if `ffmpeg` isn't on your `PATH`, focal fetches
-  a static build into `~/Library/Caches/focal/bin` and reuses it thereafter.
+  a **native** static build (real arm64 on Apple Silicon, x86_64 on Intel) into
+  `~/Library/Caches/focal/bin` and reuses it thereafter.
+- **Live progress bar** — parses FFmpeg's `-progress` stream into a determinate
+  `[██████░░░░] 60% · 6/10 frames` bar on a terminal, degrading to plain step
+  lines when output is redirected.
 - **Clean architecture** — the core use case depends only on interfaces; disk
   I/O, EXIF parsing, downloads, and process execution are all injected and
   independently unit-tested.
@@ -58,6 +62,13 @@ Example — build a 24 fps timelapse and overwrite the default output name:
 
 ```bash
 focal lapse -i ~/Pictures/sunset -o sunset.mp4 -f 24
+```
+
+Check the build:
+
+```bash
+focal --version        # terse: focal version x.y.z
+focal version          # detailed: version, commit, build date, Go, platform
 ```
 
 ## How it works

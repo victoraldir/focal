@@ -83,6 +83,7 @@ func (t *Timelapser) Create(ctx context.Context, req LapseRequest, progress io.W
 		ConcatFilePath: concatPath,
 		OutputPath:     req.OutputPath,
 		FPS:            req.FPS,
+		TotalFrames:    len(images),
 	}
 	if err := t.Encoder.Encode(ctx, encReq, progress); err != nil {
 		return fmt.Errorf("encoding video: %w", err)

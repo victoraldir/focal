@@ -39,4 +39,5 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(newLapseCmd())
+	rootCmd.AddCommand(newVersionCmd())
 }

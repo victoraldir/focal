@@ -43,6 +43,9 @@ type EncodeRequest struct {
 	ConcatFilePath string
 	OutputPath     string
 	FPS            int
+	// TotalFrames is the number of source images. It lets the encoder render a
+	// determinate progress bar (frames done / total) rather than a spinner.
+	TotalFrames int
 }
 
 // Encoder turns a prepared concat file into an output video. It owns FFmpeg
@@ -52,10 +55,13 @@ type Encoder interface {
 }
 
 // FFmpegRunner is the low-level process-execution seam. Implementations run the
-// given command, streaming its stderr to the provided writer. Tests substitute a
-// runner that records arguments instead of spawning a process.
+// given command, connecting its standard output and standard error to the
+// provided writers. FFmpeg's machine-readable "-progress" stream is written to
+// stdout while human-readable diagnostics go to stderr, so the encoder wires a
+// progress renderer to the former and an error buffer to the latter. Tests
+// substitute a runner that records arguments instead of spawning a process.
 type FFmpegRunner interface {
-	Run(ctx context.Context, name string, args []string, stderr io.Writer) error
+	Run(ctx context.Context, name string, args []string, stdout, stderr io.Writer) error
 }
 
 // ConcatBuilder writes an FFmpeg concat-demuxer file describing the ordered

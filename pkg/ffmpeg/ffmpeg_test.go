@@ -1,6 +1,7 @@
 package ffmpeg_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -12,15 +13,25 @@ import (
 	"github.com/victoraldir/focal/pkg/ffmpeg"
 )
 
-// fakeRunner records the command it was asked to run instead of executing it.
+// fakeRunner records the command it was asked to run instead of executing it,
+// and can emit canned bytes to the stdout/stderr writers to exercise the
+// encoder's progress and error handling.
 type fakeRunner struct {
-	name string
-	args []string
-	err  error
+	name       string
+	args       []string
+	emitStdout string
+	emitStderr string
+	err        error
 }
 
-func (f *fakeRunner) Run(_ context.Context, name string, args []string, _ io.Writer) error {
+func (f *fakeRunner) Run(_ context.Context, name string, args []string, stdout, stderr io.Writer) error {
 	f.name, f.args = name, args
+	if f.emitStdout != "" {
+		io.WriteString(stdout, f.emitStdout)
+	}
+	if f.emitStderr != "" {
+		io.WriteString(stderr, f.emitStderr)
+	}
 	return f.err
 }
 
@@ -36,7 +47,7 @@ func TestBuildArgs_Shape(t *testing.T) {
 	for _, want := range []string{
 		"-f concat", "-safe 0", "-i /tmp/list.txt",
 		"-pix_fmt yuv420p", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-		"-r 24",
+		"-r 24", "-progress pipe:1", "-nostats",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("args %q missing %q", joined, want)
@@ -44,6 +55,45 @@ func TestBuildArgs_Shape(t *testing.T) {
 	}
 	if args[len(args)-1] != "out.mp4" {
 		t.Errorf("output must be the last argument, got %q", args[len(args)-1])
+	}
+}
+
+func TestEngine_Encode_ErrorIncludesStderrTail(t *testing.T) {
+	engine := ffmpeg.NewEngine(&fakeRunner{
+		err:        errors.New("exit 1"),
+		emitStderr: "Unknown encoder 'nope'\n",
+	})
+	err := engine.Encode(context.Background(), domain.EncodeRequest{
+		FFmpegPath: "/bin/ffmpeg", ConcatFilePath: "x", OutputPath: "y", FPS: 30, TotalFrames: 3,
+	}, io.Discard)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "Unknown encoder") {
+		t.Errorf("error should surface FFmpeg's stderr tail, got: %v", err)
+	}
+}
+
+func TestEngine_Encode_RendersProgress(t *testing.T) {
+	// FFmpeg-style progress stream for a 4-frame job reaching completion.
+	runner := &fakeRunner{
+		emitStdout: "frame=2\nfps=10.0\nprogress=continue\nframe=4\nprogress=end\n",
+	}
+	var buf bytes.Buffer
+	engine := ffmpeg.NewEngine(runner)
+
+	err := engine.Encode(context.Background(), domain.EncodeRequest{
+		FFmpegPath: "/bin/ffmpeg", ConcatFilePath: "x", OutputPath: "y", FPS: 30, TotalFrames: 4,
+	}, &buf)
+	if err != nil {
+		t.Fatalf("Encode error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "50%") {
+		t.Errorf("expected a 50%% checkpoint in progress output:\n%s", out)
+	}
+	if !strings.Contains(out, "100%") {
+		t.Errorf("expected a 100%% completion in progress output:\n%s", out)
 	}
 }
 

@@ -5,11 +5,12 @@ import "path"
 // buildTarget describes where to obtain a static FFmpeg build for one platform
 // and how to find the binary inside the downloaded archive.
 type buildTarget struct {
-	// URL is the download location of the archive (zip or tar).
+	// URL is the download location of the archive (zip or tar). It may be a
+	// redirect; the downloader follows redirects transparently.
 	URL string
 	// BinaryPathInArchive is the path of the ffmpeg executable within the
 	// archive. An empty string means "the first regular file", which suits
-	// single-binary archives such as evermeet's.
+	// single-binary archives such as these.
 	BinaryPathInArchive string
 }
 
@@ -27,16 +28,19 @@ func (b buildTarget) archiveName() string {
 // project's macOS-first goal. Adding Linux or Windows later is purely a matter
 // of adding entries here — the resolution flow in resolver.go is platform-agnostic.
 //
-// evermeet.cx publishes signed, static macOS builds. The service currently
-// serves x86_64 binaries, which run on Apple Silicon under Rosetta 2; when a
-// native arm64 endpoint is published, only the arm64 URL below needs updating.
+// Both macOS builds come from Martin Riedl's static-build service
+// (https://ffmpeg.martin-riedl.de), which publishes *native* per-architecture
+// binaries — a real arm64 (Apple Silicon) build rather than an x86_64 binary
+// running under Rosetta 2. The "/redirect/latest/.../snapshot/ffmpeg.zip" URLs
+// are stable permalinks that 307-redirect to the newest versioned archive, each
+// of which contains a single top-level "ffmpeg" binary.
 var defaultBuilds = map[string]buildTarget{
-	"darwin/amd64": {
-		URL:                 "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+	"darwin/arm64": {
+		URL:                 "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/snapshot/ffmpeg.zip",
 		BinaryPathInArchive: "", // single-binary zip
 	},
-	"darwin/arm64": {
-		URL:                 "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+	"darwin/amd64": {
+		URL:                 "https://ffmpeg.martin-riedl.de/redirect/latest/macos/amd64/snapshot/ffmpeg.zip",
 		BinaryPathInArchive: "",
 	},
 }
