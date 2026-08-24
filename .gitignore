@@ -7,6 +7,8 @@
 # Output artifacts
 *.mp4
 *.mov
+# ...but keep the documentation site's sample assets
+!docs/assets/*.mp4
 
 # Go
 *.out
