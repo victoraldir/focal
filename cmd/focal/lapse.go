@@ -21,11 +21,12 @@ type lapseFlags struct {
 	maxHeight int
 }
 
-// defaultMaxHeight caps output at 4K (2160p) by default. Full-sensor stills
-// (e.g. 6000x3376) otherwise yield 6K video that exceeds every hardware H.264
-// decoder's limit and stutters on playback; 2160p decodes in hardware
-// everywhere while preserving quality.
-const defaultMaxHeight = 2160
+// defaultMaxHeight caps output at 1080p by default — the universally smooth,
+// share-ready sweet spot. Full-sensor stills (e.g. 6000x3376) otherwise yield
+// 6K video that exceeds every hardware H.264 decoder's limit and stutters on
+// playback. Users who want more can raise the cap (e.g. --max-height 2160) or
+// disable it entirely (--max-height 0).
+const defaultMaxHeight = 1080
 
 // newLapseCmd builds the `focal lapse` subcommand. Construction of the use case
 // and its dependencies happens per-invocation in RunE, which keeps the command

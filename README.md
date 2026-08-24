@@ -59,14 +59,14 @@ focal lapse --input <dir> [--output <file>] [--fps <n>]
 | `--input`         | `-i`  | *(required)*     | Directory containing source photos            |
 | `--output`        | `-o`  | `timelapse.mp4`  | Output video file path                        |
 | `--fps`           | `-f`  | `30`             | Output frames per second                      |
-| `--max-height`    |       | `2160`           | Cap output height (px) for smooth playback; `0` keeps source resolution |
+| `--max-height`    |       | `1080`           | Cap output height (px) for smooth playback; `0` keeps source resolution |
 
 > **Why `--max-height`?** Full-sensor stills (e.g. a 24 MP mirrorless at
 > 6000×3376) would otherwise produce ~6K video that exceeds every hardware H.264
 > decoder's limit — it falls back to software decoding and stutters. focal caps
-> output at 4K (2160p) by default so it plays smoothly everywhere while keeping
-> quality. Raise it, lower it (`--max-height 1080`), or disable it
-> (`--max-height 0`) as you like.
+> output at 1080p by default so it plays smoothly everywhere and stays easy to
+> share. Raise it (`--max-height 2160` for 4K) or disable it (`--max-height 0`
+> to keep full resolution) as you like.
 
 Example — build a 24 fps timelapse and overwrite the default output name:
 
@@ -74,7 +74,7 @@ Example — build a 24 fps timelapse and overwrite the default output name:
 focal lapse -i ~/Pictures/sunset -o sunset.mp4 -f 24
 ```
 
-Keep the full sensor resolution instead of the 4K cap:
+Keep the full sensor resolution instead of the 1080p cap:
 
 ```bash
 focal lapse -i ~/Pictures/sunset --max-height 0
