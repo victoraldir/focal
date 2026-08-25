@@ -7,6 +7,7 @@ package ffmpeg
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/victoraldir/focal/pkg/domain"
@@ -72,9 +73,16 @@ func renderConcat(images []domain.Image, fps int) string {
 	return b.String()
 }
 
-// escapeConcatPath escapes a path for inclusion inside single quotes in a concat
-// file. FFmpeg's escaping rule for a single quote is to close the quote, emit an
-// escaped quote, and reopen: ' -> '\”.
+// escapeConcatPath prepares a path for inclusion inside single quotes in a
+// concat file.
+//
+// Two transforms are applied. First, backslash separators are converted to
+// forward slashes via filepath.ToSlash — a no-op on Unix, but essential on
+// Windows: the concat demuxer treats "\" as an escape character, so a raw
+// "C:\Users\...\img.jpg" would be mis-parsed. FFmpeg accepts "C:/Users/..." on
+// Windows, so forward slashes are both safe and unambiguous. Second, single
+// quotes are escaped per FFmpeg's rule — close the quote, emit an escaped quote,
+// reopen: ' -> '\”.
 func escapeConcatPath(path string) string {
-	return strings.ReplaceAll(path, "'", `'\''`)
+	return strings.ReplaceAll(filepath.ToSlash(path), "'", `'\''`)
 }

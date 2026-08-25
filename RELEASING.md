@@ -3,9 +3,11 @@
 Releases are cut by pushing a semver tag. A GitHub Actions workflow
 (`.github/workflows/release.yml`) then runs `goreleaser release --clean`, which:
 
-1. Builds `darwin/arm64` and `darwin/amd64` binaries.
-2. Creates a GitHub Release with the archives and `checksums.txt`.
+1. Builds `darwin/arm64`, `darwin/amd64`, and `windows/amd64` binaries.
+2. Creates a GitHub Release with the archives (`.tar.gz` for macOS, `.zip` for
+   Windows) and `checksums.txt`.
 3. Generates a Homebrew **cask** and pushes it to the tap repository.
+4. Generates a **Scoop** manifest and pushes it to the bucket repository.
 
 ## One-time setup
 
@@ -44,6 +46,36 @@ In `github.com/victoraldir/focal`:
 The workflow already maps this secret into the `HOMEBREW_TAP_TOKEN` environment
 variable that `.goreleaser.yaml` references.
 
+### 4. Create the Scoop bucket repository (Windows)
+
+Create a **public** repo named `scoop-bucket` under your account:
+
+```
+github.com/victoraldir/scoop-bucket
+```
+
+It can start empty — GoReleaser writes `focal.json` (the Scoop manifest) into it
+on the first release. Users then run:
+
+```powershell
+scoop bucket add focal https://github.com/victoraldir/scoop-bucket
+scoop install focal
+```
+
+### 5. Create a PAT for the bucket and store it as an Actions secret
+
+Exactly as in steps 2–3, but for `scoop-bucket`:
+
+- Create a PAT with **Contents: Read and write** on `scoop-bucket` (fine-grained,
+  preferred) or the classic `repo` scope.
+- In `github.com/victoraldir/focal`: **Settings → Secrets and variables →
+  Actions → New repository secret**
+  - **Name:** `SCOOP_BUCKET_TOKEN`
+  - **Value:** the PAT
+
+The workflow maps this into the `SCOOP_BUCKET_TOKEN` environment variable that
+`.goreleaser.yaml` references.
+
 ## Cutting a release
 
 ```bash
@@ -54,21 +86,27 @@ git push origin v0.1.0
 
 Watch the run under the repo's **Actions** tab. On success you'll have:
 
-- A GitHub Release at `focal/releases/tag/v0.1.0` with macOS archives.
+- A GitHub Release at `focal/releases/tag/v0.1.0` with macOS (`.tar.gz`) and
+  Windows (`.zip`) archives.
 - An updated `Casks/focal.rb` committed to `homebrew-tap`.
+- An updated `focal.json` committed to `scoop-bucket`.
 
 Users can then install:
 
 ```bash
+# macOS
 brew tap victoraldir/tap
 brew install --cask focal
 ```
 
-Or upgrade:
-
-```bash
-brew update && brew upgrade focal
+```powershell
+# Windows
+scoop bucket add focal https://github.com/victoraldir/scoop-bucket
+scoop install focal
 ```
+
+Or upgrade (`brew update && brew upgrade focal` on macOS,
+`scoop update focal` on Windows).
 
 ## Validating locally before tagging
 

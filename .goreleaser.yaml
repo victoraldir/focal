@@ -18,12 +18,19 @@ builds:
     binary: focal
     env:
       - CGO_ENABLED=0
-    # macOS-first: build both Apple Silicon and Intel targets.
+    # Build native macOS (Apple Silicon + Intel) and Windows targets. focal is
+    # CGO-free, so cross-compiling Windows from the macOS release runner is free.
     goos:
       - darwin
+      - windows
     goarch:
       - arm64
       - amd64
+    ignore:
+      # focal only auto-downloads a static FFmpeg for windows/amd64; skip the
+      # windows/arm64 combo rather than ship a binary with no zero-dep FFmpeg path.
+      - goos: windows
+        goarch: arm64
     # Embed release metadata into the cmd/focal package for `focal version`.
     ldflags:
       - -s -w
@@ -34,6 +41,11 @@ builds:
 archives:
   - id: focal
     formats: [tar.gz]
+    # Windows users expect .zip, not .tar.gz. GoReleaser also names the binary
+    # focal.exe automatically on Windows.
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
@@ -92,3 +104,30 @@ homebrew_casks:
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/focal"]
           end
+
+# Generate and push a Scoop manifest to the bucket repository — the Windows
+# analogue of the Homebrew tap. Scoop is a free, open-source, admin-less package
+# manager; users add the bucket once and then `scoop install focal`. The manifest
+# points at the windows/amd64 .zip archive and its checksum.
+scoops:
+  - name: focal
+    homepage: "https://github.com/victoraldir/focal"
+    description: "Convert photo sequences into timelapses by wrapping FFmpeg"
+    license: MIT
+    # focal downloads its own static FFmpeg on first use, so ffmpeg is not a hard
+    # dependency; this note tells users where that binary lands on Windows.
+    # (Rendered by Scoop after install.)
+    post_install:
+      - "Write-Host 'focal wraps FFmpeg. If ffmpeg.exe is not already on your PATH, focal downloads a static build into %LOCALAPPDATA%\\focal\\bin on first use.'"
+    # Target bucket repository. The release job pushes the generated manifest here.
+    repository:
+      owner: victoraldir
+      name: scoop-bucket
+      branch: main
+      # SCOOP_BUCKET_TOKEN is a PAT with write access to the bucket repo,
+      # provided by the GitHub Actions workflow.
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
+    commit_author:
+      name: goreleaserbot
+      email: goreleaserbot@users.noreply.github.com
+    commit_msg_template: "scoop: focal {{ .Tag }}"
