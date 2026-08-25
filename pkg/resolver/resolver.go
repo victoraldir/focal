@@ -165,18 +165,19 @@ func (r *Resolver) platformKey() string {
 	return r.goos + "/" + r.goarch
 }
 
-// isExecutable reports whether path is a runnable file. On Unix that means an
-// owner-execute bit is set; Windows regular files carry no such bit, so a ".exe"
-// that exists as a regular file is treated as runnable. Keying off the ".exe"
-// suffix (rather than runtime.GOOS) keeps this a pure, injectable check: the
-// cached Windows binary is always named "ffmpeg.exe" (see Resolver.binaryName),
-// so the suffix is a faithful proxy for "this is a Windows executable".
+// isExecutable reports whether path is a runnable file. Executability is a
+// property of the *host* filesystem, so it keys off runtime.GOOS:
+//   - On a Windows host there is no execute bit; the OS decides runnability by
+//     extension/content at launch time, so any existing regular file qualifies.
+//   - A ".exe" qualifies on any host, so tests that emulate the Windows platform
+//     (via WithPlatform) still recognize a cached "ffmpeg.exe" when run on Unix.
+//   - Otherwise (Unix host), require an owner-execute bit as before.
 func isExecutable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
 		return false
 	}
-	if strings.EqualFold(filepath.Ext(path), ".exe") {
+	if runtime.GOOS == "windows" || strings.EqualFold(filepath.Ext(path), ".exe") {
 		return true
 	}
 	return info.Mode()&0o100 != 0
