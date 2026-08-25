@@ -15,13 +15,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/victoraldir/focal/pkg/domain"
 )
 
-// binaryName is the FFmpeg executable name looked up on PATH and written to the
-// cache. Windows support will override this with "ffmpeg.exe" via the build table.
-const binaryName = "ffmpeg"
+// binaryName returns the FFmpeg executable name looked up on PATH and written to
+// the cache, which is platform-dependent: "ffmpeg.exe" on Windows, "ffmpeg"
+// elsewhere. It reads r.goos (not runtime.GOOS) so tests can drive platform
+// selection through WithPlatform.
+func (r *Resolver) binaryName() string {
+	if r.goos == "windows" {
+		return "ffmpeg.exe"
+	}
+	return "ffmpeg"
+}
 
 // Resolver implements domain.BinaryResolver. It composes a PATH lookup, a cache
 // directory, a downloader, and an archive extractor — each injected so the
@@ -91,7 +99,7 @@ func New(downloader domain.BinaryDownloader, log domain.Logger, opts ...Option) 
 // Resolve returns a path to a runnable FFmpeg binary, obtaining one as needed.
 // Resolution order: PATH, then the cache, then a fresh download.
 func (r *Resolver) Resolve(ctx context.Context) (string, error) {
-	if path, err := r.lookPath(binaryName); err == nil {
+	if path, err := r.lookPath(r.binaryName()); err == nil {
 		r.log.Infof("Using ffmpeg from PATH: %s", path)
 		return path, nil
 	}
@@ -143,13 +151,13 @@ func (r *Resolver) fetch(ctx context.Context, destBinary string) (string, error)
 }
 
 // cachedBinaryPath returns the expected on-disk path of the managed binary:
-// <UserCacheDir>/focal/bin/ffmpeg.
+// <UserCacheDir>/focal/bin/ffmpeg (or ffmpeg.exe on Windows).
 func (r *Resolver) cachedBinaryPath() (string, error) {
 	base, err := r.cacheDir()
 	if err != nil {
 		return "", fmt.Errorf("locating user cache dir: %w", err)
 	}
-	return filepath.Join(base, "focal", "bin", binaryName), nil
+	return filepath.Join(base, "focal", "bin", r.binaryName()), nil
 }
 
 // platformKey is the "<goos>/<goarch>" lookup key into the build table.
@@ -157,11 +165,19 @@ func (r *Resolver) platformKey() string {
 	return r.goos + "/" + r.goarch
 }
 
-// isExecutable reports whether path exists and has an owner-execute bit set.
+// isExecutable reports whether path is a runnable file. On Unix that means an
+// owner-execute bit is set; Windows regular files carry no such bit, so a ".exe"
+// that exists as a regular file is treated as runnable. Keying off the ".exe"
+// suffix (rather than runtime.GOOS) keeps this a pure, injectable check: the
+// cached Windows binary is always named "ffmpeg.exe" (see Resolver.binaryName),
+// so the suffix is a faithful proxy for "this is a Windows executable".
 func isExecutable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil || info.IsDir() {
 		return false
+	}
+	if strings.EqualFold(filepath.Ext(path), ".exe") {
+		return true
 	}
 	return info.Mode()&0o100 != 0
 }

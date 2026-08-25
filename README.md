@@ -5,8 +5,8 @@
 `focal` is a small, modular CLI that turns a directory of photos into a
 timelapse video by wrapping [FFmpeg](https://ffmpeg.org/). It orders frames
 chronologically from EXIF metadata, warns about inconsistent aspect ratios, and
-— on macOS — downloads a static FFmpeg build automatically when one is not
-already installed.
+— on macOS and Windows — downloads a static FFmpeg build automatically when one
+is not already installed.
 
 ```
 focal lapse -i ./photos -o timelapse.mp4 -f 24
@@ -18,9 +18,10 @@ focal lapse -i ./photos -o timelapse.mp4 -f 24
   file modification time when EXIF is missing.
 - **Aspect-ratio guard** — warns when the sequence mixes orientations, and pads
   output to even dimensions (`yuv420p`-safe) so any source resolution encodes.
-- **Zero-dependency on macOS** — if `ffmpeg` isn't on your `PATH`, focal fetches
-  a **native** static build (real arm64 on Apple Silicon, x86_64 on Intel) into
-  `~/Library/Caches/focal/bin` and reuses it thereafter.
+- **Zero-dependency on macOS & Windows** — if `ffmpeg` isn't on your `PATH`,
+  focal fetches a **native** static build and reuses it thereafter. On macOS it
+  lands in `~/Library/Caches/focal/bin` (real arm64 on Apple Silicon, x86_64 on
+  Intel); on Windows it's `ffmpeg.exe` in `%LOCALAPPDATA%\focal\bin`.
 - **Live progress bar** — parses FFmpeg's `-progress` stream into a determinate
   `[██████░░░░] 60% · 6/10 frames` bar on a terminal, degrading to plain step
   lines when output is redirected.
@@ -30,12 +31,24 @@ focal lapse -i ./photos -o timelapse.mp4 -f 24
 
 ## Installation
 
-### Homebrew (recommended)
+### macOS — Homebrew (recommended)
 
 ```bash
 brew tap victoraldir/tap
 brew install --cask focal
 ```
+
+### Windows — Scoop (recommended)
+
+[Scoop](https://scoop.sh) is a free, open-source package manager that needs no
+administrator rights:
+
+```powershell
+scoop bucket add focal https://github.com/victoraldir/scoop-bucket
+scoop install focal
+```
+
+Upgrade later with `scoop update focal`.
 
 ### From source
 
@@ -45,8 +58,9 @@ go install github.com/victoraldir/focal@latest
 
 ### Pre-built binaries
 
-Download a `tar.gz` for your platform from the
-[releases page](https://github.com/victoraldir/focal/releases).
+Download an archive for your platform from the
+[releases page](https://github.com/victoraldir/focal/releases) — `tar.gz` for
+macOS, `.zip` for Windows.
 
 ## Usage
 
@@ -102,8 +116,8 @@ cmd/focal ──constructs──▶ domain.Timelapser (use case)
 1. **Scan** — `pkg/scanner` reads image headers for dimensions and resolves each
    frame's timestamp (EXIF, then mtime), returning the sequence sorted oldest-first.
 2. **Resolve FFmpeg** — `pkg/resolver` checks `PATH`, then the user cache, then
-   downloads and extracts a static build for the detected `darwin/arm64` or
-   `darwin/amd64` target.
+   downloads and extracts a static build for the detected target
+   (`darwin/arm64`, `darwin/amd64`, or `windows/amd64`).
 3. **Generate concat file** — `pkg/ffmpeg` writes an FFmpeg concat-demuxer file
    (`file '...'` + `duration`) to a temp path, cleaned up on exit.
 4. **Encode** — FFmpeg runs with
@@ -126,15 +140,17 @@ cmd/focal      Cobra commands (composition root: root.go, lapse.go)
 pkg/domain     Interfaces, models, and the Timelapser use case
 pkg/scanner    Image header + EXIF extraction (domain.ImageScanner)
 pkg/ffmpeg     Concat generator + command executor (domain.Encoder)
-pkg/resolver   macOS binary downloader + PATH checker (domain.BinaryResolver)
+pkg/resolver   macOS/Windows binary downloader + PATH checker (domain.BinaryResolver)
 ```
 
 ### Adding another platform
 
-The resolver is platform-agnostic: to support Linux or Windows, add an entry to
-the `defaultBuilds` table in `pkg/resolver/builds.go` (URL + in-archive binary
-path) and, for non-zip archives, a branch in `extractArchive`. No changes to the
-domain or resolution flow are required.
+The resolver is platform-agnostic: macOS (arm64/amd64) and Windows (amd64) ship
+today. To support Linux, add an entry to the `defaultBuilds` table in
+`pkg/resolver/builds.go` (URL + in-archive binary path) and, for non-zip
+archives, a branch in `extractArchive`. No changes to the domain or resolution
+flow are required — `Resolver.binaryName` already appends `.exe` on Windows and
+`isExecutable` already accounts for platforms without a Unix execute bit.
 
 ## Releasing (maintainers)
 
