@@ -6,7 +6,7 @@
 <title>focal — cinematic timelapses from a folder of photos</title>
 <meta name="description" content="focal is a fast, dependency-free CLI that turns photo sequences into cinematic timelapses. It orders shots by EXIF time, auto-fetches FFmpeg, and renders a share-ready video in one command." />
 <meta property="og:title" content="focal — cinematic timelapses from a folder of photos" />
-<meta property="og:description" content="Turn a folder of photos into a timelapse in one command. EXIF-ordered, FFmpeg-powered, zero-config on macOS." />
+<meta property="og:description" content="Turn a folder of photos into a timelapse in one command. EXIF-ordered, FFmpeg-powered, zero-config on macOS and Windows." />
 <meta property="og:type" content="website" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -284,7 +284,7 @@
   </video>
   <div class="hero-scrim"></div>
   <div class="wrap">
-    <span class="eyebrow"><span class="dot"></span> macOS &middot; single binary &middot; MIT licensed</span>
+    <span class="eyebrow"><span class="dot"></span> macOS &amp; Windows &middot; single binary &middot; MIT licensed</span>
     <h1>Photos in.<br /><span class="grad">Timelapse out.</span></h1>
     <p class="lede"><strong>focal</strong> turns a folder of photos into a cinematic timelapse — in one command. It orders your shots by <strong>EXIF capture time</strong>, finds or fetches <strong>FFmpeg</strong> for you, and renders a clean, share-ready video.</p>
     <div class="hero-actions">
@@ -351,7 +351,7 @@
       <div class="feature">
         <div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg></div>
         <h3>Zero-config FFmpeg</h3>
-        <p>No FFmpeg? focal downloads a <b>native</b> static build (real arm64 on Apple Silicon) into its cache on first use. Already have it? It just uses yours.</p>
+        <p>No FFmpeg? focal downloads a <b>native</b> static build (real arm64 on Apple Silicon, win64 on Windows) into its cache on first use. Already have it? It just uses yours.</p>
       </div>
       <div class="feature">
         <div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="3" y="10" width="18" height="5" rx="2"/><path d="M3 12h11"/></svg></div>
@@ -371,7 +371,7 @@
       <div class="feature">
         <div class="ficon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></div>
         <h3>Single binary</h3>
-        <p>Written in Go, shipped as one dependency-free executable via Homebrew. Fast to install, fast to run, nothing left behind.</p>
+        <p>Written in Go, shipped as one dependency-free executable via Homebrew and Scoop. Fast to install, fast to run, nothing left behind.</p>
       </div>
     </div>
   </div>
@@ -383,14 +383,19 @@
     <div class="section-head">
       <span class="kicker">Install</span>
       <h2>Up and running in seconds</h2>
-      <p>The recommended path is Homebrew. Prefer Go or a raw binary? Those work too.</p>
+      <p>On macOS reach for Homebrew, on Windows reach for Scoop. Prefer Go or a raw binary? Those work too.</p>
     </div>
     <div class="install-grid">
       <div>
         <div class="code-card">
-          <div class="cc-head"><span class="cc-title">Homebrew</span><span class="cc-badge">RECOMMENDED</span></div>
+          <div class="cc-head"><span class="cc-title">Homebrew &middot; macOS</span><span class="cc-badge">RECOMMENDED</span></div>
           <pre><button class="copy-btn" data-copy="brew tap victoraldir/tap&#10;brew install --cask focal">Copy</button><code><span class="c-prompt">$ </span>brew tap victoraldir/tap
 <span class="c-prompt">$ </span>brew install --cask focal</code></pre>
+        </div>
+        <div class="code-card">
+          <div class="cc-head"><span class="cc-title">Scoop &middot; Windows</span><span class="cc-badge">RECOMMENDED</span></div>
+          <pre><button class="copy-btn" data-copy="scoop bucket add focal https://github.com/victoraldir/scoop-bucket&#10;scoop install focal">Copy</button><code><span class="c-prompt">&gt; </span>scoop bucket add focal https://github.com/victoraldir/scoop-bucket
+<span class="c-prompt">&gt; </span>scoop install focal</code></pre>
         </div>
         <div class="code-card">
           <div class="cc-head"><span class="cc-title">Go install</span></div>
@@ -407,9 +412,9 @@ focal 0.1.0
       <div class="install-note">
         <h3>Good to know</h3>
         <ul>
-          <li>Requires <b>macOS</b> (Apple Silicon or Intel) — native builds for both.</li>
-          <li>FFmpeg is <b>optional</b>. focal fetches a static build into <code>~/Library/Caches/focal/bin</code> on first use if it's not already on your <code>PATH</code>.</li>
-          <li>The Homebrew cask is <b>auto-published</b> on every release, so <code>brew upgrade --cask focal</code> always gets the latest.</li>
+          <li>Runs on <b>macOS</b> (Apple Silicon or Intel) and <b>Windows</b> (64-bit) — native builds for each.</li>
+          <li>FFmpeg is <b>optional</b>. focal fetches a static build on first use if it's not already on your <code>PATH</code> — into <code>~/Library/Caches/focal/bin</code> on macOS, <code>%LOCALAPPDATA%\focal\bin</code> on Windows.</li>
+          <li>The Homebrew cask and Scoop manifest are <b>auto-published</b> on every release, so <code>brew upgrade --cask focal</code> / <code>scoop update focal</code> always get the latest.</li>
           <li>Pre-built archives for each release live on the <a href="https://github.com/victoraldir/focal/releases" target="_blank" rel="noopener" style="color:var(--accent-2)">releases page</a>.</li>
         </ul>
       </div>
@@ -514,6 +519,7 @@ focal 0.1.0
       <a href="https://github.com/victoraldir/focal/releases" target="_blank" rel="noopener">Releases</a>
       <a href="https://github.com/victoraldir/focal/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
       <a href="https://github.com/victoraldir/homebrew-tap" target="_blank" rel="noopener">Tap</a>
+      <a href="https://github.com/victoraldir/scoop-bucket" target="_blank" rel="noopener">Bucket</a>
     </div>
     <div class="f-meta">Built with Go &middot; MIT licensed &middot; Timelapse sample rendered with focal.</div>
   </div>
