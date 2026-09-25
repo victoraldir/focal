@@ -24,16 +24,14 @@ func (b buildTarget) archiveName() string {
 	return "ffmpeg-download" + ext
 }
 
-// defaultBuilds is the platform build table. macOS is supported first, per the
-// project's macOS-first goal. Adding Linux or Windows later is purely a matter
-// of adding entries here — the resolution flow in resolver.go is platform-agnostic.
+// defaultBuilds is the platform build table. Adding a new operating system is
+// purely a matter of adding entries here — the resolution flow in resolver.go is
+// platform-agnostic.
 //
-// Both macOS builds come from Martin Riedl's static-build service
-// (https://ffmpeg.martin-riedl.de), which publishes *native* per-architecture
-// binaries — a real arm64 (Apple Silicon) build rather than an x86_64 binary
-// running under Rosetta 2. The "/redirect/latest/.../snapshot/ffmpeg.zip" URLs
-// are stable permalinks that 307-redirect to the newest versioned archive, each
-// of which contains a single top-level "ffmpeg" binary.
+// macOS builds come from Martin Riedl's static-build service
+// (https://ffmpeg.martin-riedl.de), which publishes native per-architecture
+// binaries. The Windows build comes from Gyan.dev's maintained Windows builds;
+// its stable essentials URL contains ffmpeg.exe below a versioned directory.
 var defaultBuilds = map[string]buildTarget{
 	"darwin/arm64": {
 		URL:                 "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/snapshot/ffmpeg.zip",
@@ -42,5 +40,12 @@ var defaultBuilds = map[string]buildTarget{
 	"darwin/amd64": {
 		URL:                 "https://ffmpeg.martin-riedl.de/redirect/latest/macos/amd64/snapshot/ffmpeg.zip",
 		BinaryPathInArchive: "",
+	},
+	// Gyan.dev publishes a stable URL for the latest win64 essentials build. The
+	// extractor matches by base name, so the versioned top-level directory does
+	// not need to be encoded here.
+	"windows/amd64": {
+		URL:                 "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+		BinaryPathInArchive: "ffmpeg.exe",
 	},
 }

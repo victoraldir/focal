@@ -105,6 +105,70 @@ func TestResolve_DownloadsAndExtracts(t *testing.T) {
 	}
 }
 
+func TestResolve_Windows_DownloadsExeAndExtracts(t *testing.T) {
+	cache := t.TempDir()
+	archive := makeZip(t, "ffmpeg.exe", []byte("FAKE-FFMPEG-EXE"))
+
+	dl := &fakeDownloader{src: archive}
+	r := New(dl, noopLogger{},
+		WithLookPath(func(string) (string, error) { return "", errors.New("not found") }),
+		WithCacheDir(func() (string, error) { return cache, nil }),
+		WithPlatform("windows", "amd64"),
+		WithBuilds(map[string]buildTarget{
+			"windows/amd64": {URL: "https://example.test/ffmpeg.zip", BinaryPathInArchive: "ffmpeg.exe"},
+		}),
+	)
+
+	got, err := r.Resolve(context.Background())
+	if err != nil {
+		t.Fatalf("Resolve error: %v", err)
+	}
+	if !dl.called {
+		t.Error("expected a download to occur")
+	}
+	// The cached binary must carry the .exe suffix so Windows PATH/exec semantics work.
+	if filepath.Base(got) != "ffmpeg.exe" {
+		t.Errorf("resolved binary = %q, want basename ffmpeg.exe", filepath.Base(got))
+	}
+	if !isExecutable(got) {
+		t.Errorf("resolved Windows binary %q is not treated as executable", got)
+	}
+	data, _ := os.ReadFile(got)
+	if string(data) != "FAKE-FFMPEG-EXE" {
+		t.Errorf("extracted binary content = %q, want the archived bytes", data)
+	}
+}
+
+func TestResolve_Windows_UsesCachedExe(t *testing.T) {
+	cache := t.TempDir()
+	// Windows regular files have no execute bit; a cached ffmpeg.exe must still be
+	// recognized so we don't re-download on every run.
+	binPath := filepath.Join(cache, "focal", "bin", "ffmpeg.exe")
+	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binPath, []byte("MZ"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dl := &fakeDownloader{}
+	r := New(dl, noopLogger{},
+		WithLookPath(func(string) (string, error) { return "", errors.New("not found") }),
+		WithCacheDir(func() (string, error) { return cache, nil }),
+		WithPlatform("windows", "amd64"),
+	)
+	got, err := r.Resolve(context.Background())
+	if err != nil {
+		t.Fatalf("Resolve error: %v", err)
+	}
+	if got != binPath {
+		t.Errorf("got %q, want cached binary %q", got, binPath)
+	}
+	if dl.called {
+		t.Error("should not download when a cached ffmpeg.exe exists")
+	}
+}
+
 func TestResolve_UnsupportedPlatform(t *testing.T) {
 	r := New(&fakeDownloader{}, noopLogger{},
 		WithLookPath(func(string) (string, error) { return "", errors.New("not found") }),

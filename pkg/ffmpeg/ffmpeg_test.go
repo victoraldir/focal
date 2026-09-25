@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -227,5 +228,25 @@ func TestConcatGenerator_Build_EscapesQuotes(t *testing.T) {
 	data, _ := os.ReadFile(path)
 	if !strings.Contains(string(data), `'\''`) {
 		t.Errorf("single quote in path was not escaped:\n%s", data)
+	}
+}
+
+func TestConcatGenerator_Build_NormalizesWindowsPaths(t *testing.T) {
+	// On Windows this produces backslash-separated input and verifies that the
+	// concat demuxer receives forward slashes. On Unix filepath.Join is already
+	// slash-based, so the same assertion remains portable.
+	input := filepath.Join(`C:\Users\alice`, "photos", "frame.jpg")
+	path, cleanup, err := ffmpeg.NewConcatGenerator().Build([]domain.Image{{Path: input}}, 30)
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	defer cleanup()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading generated file: %v", err)
+	}
+	want := "file '" + filepath.ToSlash(input) + "'"
+	if !strings.Contains(string(data), want) {
+		t.Errorf("concat file should contain %q, got:\n%s", want, data)
 	}
 }

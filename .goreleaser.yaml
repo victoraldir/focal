@@ -18,12 +18,19 @@ builds:
     binary: focal
     env:
       - CGO_ENABLED=0
-    # macOS-first: build both Apple Silicon and Intel targets.
+    # Build native macOS (Apple Silicon + Intel) and Windows targets. focal is
+    # CGO-free, so cross-compiling Windows from the macOS release runner is free.
     goos:
       - darwin
+      - windows
     goarch:
       - arm64
       - amd64
+    ignore:
+      # focal only auto-downloads a static FFmpeg for windows/amd64; skip the
+      # windows/arm64 combo rather than ship a binary with no zero-dep FFmpeg path.
+      - goos: windows
+        goarch: arm64
     # Embed release metadata into the cmd/focal package for `focal version`.
     ldflags:
       - -s -w
@@ -34,6 +41,11 @@ builds:
 archives:
   - id: focal
     formats: [tar.gz]
+    # Windows users expect .zip, not .tar.gz. GoReleaser also names the binary
+    # focal.exe automatically on Windows.
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md

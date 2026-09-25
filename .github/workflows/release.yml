@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: macos-latest # build/test on macOS since focal targets darwin
+    runs-on: macos-latest # release from macOS; Go cross-compiles the Windows target (CGO-free)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,3 +40,9 @@ jobs:
           # push the generated formula to the tap. Add it under
           # Settings -> Secrets and variables -> Actions.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      - name: Publish Scoop manifest
+        env:
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash scripts/publish-scoop.sh
