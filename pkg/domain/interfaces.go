@@ -82,3 +82,30 @@ type Logger interface {
 	Infof(format string, args ...any)
 	Warnf(format string, args ...any)
 }
+
+// Photo is a single image fetched from a remote camera, held in memory. Frames
+// are a few megabytes at most, so buffering them keeps the Camera and
+// FrameStore seams trivial to fake in tests.
+type Photo struct {
+	// Data is the encoded image (JPEG for every Sony body focal supports).
+	Data []byte
+	// Ext is the file extension including the leading dot, e.g. ".jpg".
+	Ext string
+}
+
+// Camera is the remote-shooting seam. Prepare puts the body into a state where
+// it accepts shutter commands (for Sony bodies: still-shooting rec mode), and
+// Capture fires the shutter and returns the resulting image. Keeping the
+// protocol behind this interface means the Shooter use case never sees
+// JSON-RPC, SSDP, or Wi-Fi quirks.
+type Camera interface {
+	Prepare(ctx context.Context) error
+	Capture(ctx context.Context) (Photo, error)
+}
+
+// FrameStore persists captured frames. Save writes data under name, stamps the
+// file with takenAt (so the lapse scanner orders frames correctly even when the
+// image lacks EXIF), and returns the path written.
+type FrameStore interface {
+	Save(name string, data []byte, takenAt time.Time) (path string, err error)
+}

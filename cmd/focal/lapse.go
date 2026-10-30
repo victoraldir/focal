@@ -59,17 +59,7 @@ metadata, and encodes them into a timelapse video with FFmpeg.`,
 // cancellation, and executes.
 func runLapse(cmd *cobra.Command, flags lapseFlags) error {
 	log := newConsoleLogger(cmd.ErrOrStderr())
-
-	// Assemble the dependency graph. Every collaborator is an interface from the
-	// domain's perspective; only this function knows the concrete types.
-	exif := scanner.NewGoExifExtractor()
-	imageScanner := scanner.New(exif)
-	downloader := resolver.NewHTTPDownloader(nil)
-	binaryResolver := resolver.New(downloader, log)
-	concat := ffmpeg.NewConcatGenerator()
-	engine := ffmpeg.NewEngine(ffmpeg.NewExecRunner())
-
-	timelapser := domain.NewTimelapser(imageScanner, binaryResolver, concat, engine, log)
+	timelapser := newTimelapser(log)
 
 	// Cancel the pipeline (and any in-flight FFmpeg process) on Ctrl-C or SIGTERM.
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
@@ -83,4 +73,18 @@ func runLapse(cmd *cobra.Command, flags lapseFlags) error {
 	}
 	// FFmpeg writes progress to stderr; forward it so long encodes stay visible.
 	return timelapser.Create(ctx, req, cmd.ErrOrStderr())
+}
+
+// newTimelapser assembles the lapse dependency graph. Every collaborator is an
+// interface from the domain's perspective; only this function knows the
+// concrete types. `shoot --lapse` and the `serve` studio reuse it so every
+// entry point renders video the same way.
+func newTimelapser(log domain.Logger) *domain.Timelapser {
+	exif := scanner.NewGoExifExtractor()
+	imageScanner := scanner.New(exif)
+	downloader := resolver.NewHTTPDownloader(nil)
+	binaryResolver := resolver.New(downloader, log)
+	concat := ffmpeg.NewConcatGenerator()
+	engine := ffmpeg.NewEngine(ffmpeg.NewExecRunner())
+	return domain.NewTimelapser(imageScanner, binaryResolver, concat, engine, log)
 }

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>focal studio</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true"></span>
+      focal <span class="brand-sub">studio</span>
+    </a>
+    <nav class="nav">
+      <a href="/" class="active">Studio</a>
+      <a href="/docs">API</a>
+    </nav>
+    <div class="topbar-right">
+      <span class="pill" id="pillBattery" hidden><span class="battery"><i></i></span><strong></strong></span>
+      <span class="pill" id="pillShots" hidden><strong></strong> shots left</span>
+      <span class="pill" id="pillConn"><span class="dot"></span><strong>Not connected</strong></span>
+    </div>
+  </header>
+
+  <main class="studio">
+    <section>
+      <div class="viewfinder" id="vf">
+        <img class="live" id="live" alt="Live view">
+        <div class="grid-overlay" id="gridOverlay"><i></i><i></i><i></i><i></i></div>
+        <div class="af-box" id="afBox"></div>
+        <div class="badge-rec" id="recBadge"><span class="dot"></span><span id="recText">TL</span></div>
+        <div class="zoom-meter" id="zoomMeter"><span>ZOOM</span><span class="track"><i></i></span></div>
+        <div class="hud" id="hud">
+          <span class="mode" id="hudMode">—</span>
+          <span><span class="lbl"></span><span id="hudShutter">—</span></span>
+          <span><span class="lbl">F</span><span id="hudF">—</span></span>
+          <span><span class="lbl">ISO</span><span id="hudIso">—</span></span>
+          <span id="hudEvWrap"><span id="hudEv">±0.0</span></span>
+          <span class="grow"></span>
+          <span class="focus" id="hudFocus"></span>
+        </div>
+        <div class="flash" id="flash"></div>
+
+        <div class="vf-empty" id="vfEmpty">
+          <div class="card connect-card" id="connectCard">
+            <h2>Connect your camera</h2>
+            <p>focal talks to the camera over its own Wi-Fi network.</p>
+            <ol>
+              <li>On the camera: <b>Menu → Application List → Smart Remote Embedded</b></li>
+              <li>Join the Wi-Fi network shown on its screen (<b>DIRECT-xxxx</b>) from this computer</li>
+              <li>Press <b>Connect</b> below</li>
+            </ol>
+            <div class="err" id="connectErr" hidden></div>
+            <button class="btn primary block" id="btnConnect">Connect</button>
+          </div>
+          <div class="vf-loading" id="vfLoading" hidden><span class="spinner"></span><span id="vfLoadingText">Starting live view…</span></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="left">
+          <div class="zoom-group">
+            <button class="btn icon" id="btnZoomOut" title="Zoom out (hold)  −" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
+            </button>
+            <span class="lbl">ZOOM</span>
+            <button class="btn icon" id="btnZoomIn" title="Zoom in (hold)  +" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+          <button class="btn" id="btnAF" title="Hold to focus (half-press)" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="2.5"/></svg>
+            AF
+          </button>
+        </div>
+        <button class="shutter" id="btnShutter" title="Take photo  (Space)" disabled><i></i></button>
+        <div class="right">
+          <button class="btn icon" id="btnGrid" title="Rule-of-thirds grid  (G)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M9.2 3.5v17M14.8 3.5v17M3.5 9.2h17M3.5 14.8h17"/></svg>
+          </button>
+          <button class="btn icon" id="btnFull" title="Fullscreen  (F)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card">
+        <div class="tabs">
+          <button class="tab active" data-tab="exposure">Exposure</button>
+          <button class="tab" data-tab="timelapse">Timelapse <span class="dot" id="tabDot" hidden></span></button>
+        </div>
+
+        <div class="pane active" id="pane-exposure">
+          <h3>Exposure</h3>
+          <div id="dialsExposure"></div>
+          <div class="dial ev" id="evDial">
+            <label for="ev">Exposure comp.</label>
+            <input type="range" id="ev" min="-9" max="9" step="1" value="0" disabled>
+            <output id="evOut">±0.0 EV</output>
+          </div>
+          <h3>Image</h3>
+          <div id="dialsImage"></div>
+        </div>
+
+        <div class="pane" id="pane-timelapse">
+          <div id="tlSetup">
+            <h3>Plan</h3>
+            <label class="field">
+              <span>Interval between shots</span>
+              <div class="input-suffix"><input class="input" id="tlInterval" type="number" min="0.5" step="0.5" value="5"><em>seconds</em></div>
+            </label>
+            <div class="chips" id="intervalChips" style="margin:-4px 0 14px">
+              <button class="chip" data-v="2">2s</button><button class="chip" data-v="5">5s</button>
+              <button class="chip" data-v="10">10s</button><button class="chip" data-v="30">30s</button>
+              <button class="chip" data-v="60">1m</button>
+            </div>
+            <div class="field-row">
+              <label class="field">
+                <span>Frames <small style="color:var(--dim)">(0 = until stopped)</small></span>
+                <input class="input" id="tlCount" type="number" min="0" step="1" value="300">
+              </label>
+              <label class="field">
+                <span>Playback</span>
+                <div class="input-suffix"><input class="input" id="tlFps" type="number" min="1" max="120" value="30"><em>fps</em></div>
+              </label>
+            </div>
+            <div class="plan">
+              <div><b id="planFrames">300</b><small>frames</small></div>
+              <div><b id="planShoot">25m</b><small>shooting</small></div>
+              <div><b id="planClip">10.0s</b><small>video</small></div>
+            </div>
+            <button class="btn primary block" id="btnTlStart" disabled>
+              <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+              Start timelapse
+            </button>
+          </div>
+
+          <div id="tlRun" hidden>
+            <h3 id="tlRunTitle">Capturing</h3>
+            <div class="progress-wrap">
+              <div class="ring">
+                <svg viewBox="0 0 100 100">
+                  <defs><linearGradient id="ringGrad" x1="0" x2="1"><stop offset="0" stop-color="#ffb547"/><stop offset="1" stop-color="#ff7a45"/></linearGradient></defs>
+                  <circle class="bg" cx="50" cy="50" r="44"/>
+                  <circle class="fg" id="ringFg" cx="50" cy="50" r="44" stroke-dasharray="276.46" stroke-dashoffset="276.46"/>
+                </svg>
+                <div class="val"><b id="tlCaptured">0</b><small id="tlOf">of 300</small></div>
+              </div>
+              <div class="progress-meta">
+                <div class="kv"><span>Next shot</span><b id="tlNext">—</b></div>
+                <div class="kv"><span>Elapsed</span><b id="tlElapsed">—</b></div>
+                <div class="kv"><span>Remaining</span><b id="tlRemaining">—</b></div>
+                <div class="kv"><span>Failed</span><b id="tlFailed">0</b></div>
+              </div>
+            </div>
+            <div class="last-frame" id="tlLast"></div>
+            <div class="notice warn" id="tlWarn"></div>
+            <div class="notice err" id="tlErr"></div>
+            <button class="btn danger block" id="btnTlStop">
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              Stop
+            </button>
+            <div id="tlRender" hidden>
+              <div class="divider"></div>
+              <h3>Render video</h3>
+              <div class="notice ok" id="renderOk"></div>
+              <div class="notice err" id="renderErr"></div>
+              <div class="render-row">
+                <select class="input" id="renderFps">
+                  <option value="24">24 fps</option><option value="25">25 fps</option>
+                  <option value="30" selected>30 fps</option><option value="60">60 fps</option>
+                </select>
+                <button class="btn primary" id="btnRender">Render MP4</button>
+              </div>
+              <button class="btn block" id="btnTlNew" style="margin-top:10px">New timelapse</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shortcuts">
+        <span><kbd>Space</kbd> shoot</span>
+        <span><kbd>+</kbd> <kbd>−</kbd> zoom</span>
+        <span><kbd>G</kbd> grid</span>
+        <span><kbd>F</kbd> fullscreen</span>
+        <span><kbd>Click</kbd> viewfinder to focus</span>
+      </div>
+    </aside>
+  </main>
+
+  <section class="gallery">
+    <div class="gallery-head"><h2>Library</h2><span id="galleryCount"></span></div>
+    <div class="strip" id="strip"></div>
+  </section>
+
+  <div class="lightbox" id="lightbox">
+    <button class="btn icon close" id="lbClose" title="Close (Esc)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div id="lbBody"></div>
+    <div class="meta"><span id="lbName"></span><a class="btn" id="lbDownload" download>Download</a></div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
