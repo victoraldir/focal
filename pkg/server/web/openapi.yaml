@@ -1,0 +1,599 @@
+openapi: 3.0.3
+info:
+  title: focal studio — Camera API
+  version: "1.0"
+  description: |
+    REST API served by `focal serve`. It wraps Sony's **Camera Remote API** — the
+    JSON-RPC interface the camera's built-in *Smart Remote* app exposes over its
+    own Wi-Fi network — and adds what the camera can't do alone: downloading and
+    keeping photos, interval timelapse capture, and rendering videos with FFmpeg.
+
+    **Getting connected**
+
+    1. On the camera, open **Menu → Application List → Smart Remote Embedded**
+       (on some firmware: *Smart Remote Control*). The camera shows an SSID and password.
+    2. Join that Wi-Fi network from this computer.
+    3. Call any endpoint: focal discovers the camera over SSDP on first use. If the
+       camera was restarted, call `POST /api/camera/connect` to rediscover it.
+
+    **Two levels of control**
+
+    * The typed endpoints (*Camera*, *Shooting*, *Settings*, *Timelapse*) cover
+      everyday use with friendly JSON.
+    * `POST /api/rpc/{service}` forwards any raw JSON-RPC call to the camera,
+      exposing the full Camera Remote API. Use `GET /api/rpc/methods` to see which
+      methods the camera accepts *right now* — the list changes with the shooting
+      and exposure mode.
+
+    Camera-side failures surface as `cameraCode` in the error body. Common codes:
+    `1` not available now, `3` illegal argument, `12` no such method,
+    `40400` shooting failed, `40401` camera not ready, `40403` still capturing.
+  license:
+    name: MIT
+    url: https://github.com/victoraldir/focal/blob/main/LICENSE
+servers:
+  - url: /
+tags:
+  - name: Camera
+    description: Connection and state.
+  - name: Shooting
+    description: Shutter, live view, zoom and focus.
+  - name: Settings
+    description: Exposure and image settings.
+  - name: Timelapse
+    description: Interval capture sessions and rendering them to video.
+  - name: Media
+    description: Photos and videos stored on this computer.
+  - name: Raw Camera API
+    description: |
+      Direct passthrough to Sony's Camera Remote API (JSON-RPC 1.0 style). Requests
+      are `{"method", "params", "version"}`; responses mirror the camera's
+      `{"result": [...]}` or `{"error": [code, "message"]}` envelope.
+
+paths:
+  /api/camera:
+    get:
+      tags: [Camera]
+      summary: Connection info
+      description: Reports whether a camera is connected, without triggering discovery.
+      operationId: getCamera
+      responses:
+        "200":
+          description: Connection info.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CameraInfo" }
+  /api/camera/connect:
+    post:
+      tags: [Camera]
+      summary: (Re)connect
+      description: Drops any cached connection, rediscovers the camera, and enters remote shooting mode.
+      operationId: connectCamera
+      responses:
+        "200":
+          description: Connected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CameraInfo" }
+        "503": { $ref: "#/components/responses/NotConnected" }
+  /api/status:
+    get:
+      tags: [Camera]
+      summary: Camera status
+      description: |
+        A normalised snapshot of the camera's event feed (`getEvent`): current
+        settings with the values allowed right now, battery, card space, zoom
+        and focus state. Settings the camera does not report are omitted.
+      operationId: getStatus
+      responses:
+        "200":
+          description: Current status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "503": { $ref: "#/components/responses/NotConnected" }
+        "502": { $ref: "#/components/responses/CameraUnreachable" }
+
+  /api/capture:
+    post:
+      tags: [Shooting]
+      summary: Take a photo
+      description: |
+        Fires the shutter, downloads the image and stores it in the media
+        directory. The image is full resolution when the camera supports
+        "Original" transfer; otherwise it is the ~2 MP postview.
+      operationId: capture
+      responses:
+        "201":
+          description: Photo captured and stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Media" }
+        "409": { $ref: "#/components/responses/CameraRefused" }
+        "503": { $ref: "#/components/responses/NotConnected" }
+  /api/liveview:
+    get:
+      tags: [Shooting]
+      summary: Live view stream (MJPEG)
+      description: |
+        A `multipart/x-mixed-replace` MJPEG stream — use it directly as an
+        `<img src>`. One camera stream is shared by all viewers. (Swagger UI
+        cannot render a never-ending stream; open the URL in a browser tab instead.)
+      operationId: liveview
+      responses:
+        "200":
+          description: Endless MJPEG stream.
+          content:
+            multipart/x-mixed-replace:
+              schema: { type: string, format: binary }
+        "503": { $ref: "#/components/responses/NotConnected" }
+  /api/liveview/snapshot:
+    get:
+      tags: [Shooting]
+      summary: Live view snapshot
+      description: The most recent live-view frame as a single JPEG (about 640×424).
+      operationId: liveviewSnapshot
+      responses:
+        "200":
+          description: JPEG frame.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "502": { $ref: "#/components/responses/CameraUnreachable" }
+        "503": { $ref: "#/components/responses/NotConnected" }
+  /api/zoom:
+    post:
+      tags: [Shooting]
+      summary: Power zoom
+      description: |
+        Drives the power zoom (e.g. the a5000's 16–50 mm kit lens). `1shot`
+        moves one step; `start`…`stop` zooms continuously, which is what
+        press-and-hold controls should use.
+      operationId: zoom
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ZoomRequest" }
+            examples:
+              step-in: { value: { direction: in, movement: 1shot } }
+              hold-out: { value: { direction: out, movement: start } }
+              release: { value: { direction: out, movement: stop } }
+      responses:
+        "204": { description: Zoom command accepted. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/CameraRefused" }
+  /api/focus/half-press:
+    post:
+      tags: [Shooting]
+      summary: Half-press shutter (autofocus)
+      description: Focuses and locks, like half-pressing the shutter button. Release with `/api/focus/release`.
+      operationId: halfPress
+      responses:
+        "204": { description: Focus acquired. }
+        "409": { $ref: "#/components/responses/CameraRefused" }
+  /api/focus/release:
+    post:
+      tags: [Shooting]
+      summary: Release half-press
+      operationId: releaseFocus
+      responses:
+        "204": { description: Released. }
+        "409": { $ref: "#/components/responses/CameraRefused" }
+  /api/focus/touch:
+    post:
+      tags: [Shooting]
+      summary: Touch autofocus
+      description: Focuses on a point of the frame. Not every body offers this (check `availableApis` for `setTouchAFPosition`).
+      operationId: touchFocus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TouchRequest" }
+      responses:
+        "204": { description: Focused. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/CameraRefused" }
+
+  /api/settings/{name}:
+    put:
+      tags: [Settings]
+      summary: Change a setting
+      description: |
+        Sets one shooting setting. Values are the camera's own strings, exactly as
+        listed in the setting's `candidates` in `GET /api/status`.
+
+        | name | example values |
+        |---|---|
+        | `exposureMode` | `Program Auto`, `Aperture`, `Shutter`, `Manual`, `Intelligent Auto` |
+        | `fNumber` | `3.5`, `5.6`, `8.0` (Aperture / Manual modes) |
+        | `shutterSpeed` | `1/125`, `1/30`, `2"`, `30"` (Shutter / Manual modes) |
+        | `isoSpeedRate` | `AUTO`, `100`, `3200` |
+        | `exposureCompensation` | step index, e.g. `-3` = −1 EV at ⅓-stop steps |
+        | `whiteBalance` | `Auto WB`, `Daylight`, `Shade`, `Cloudy`, `Incandescent` |
+        | `focusMode` | `AF-S`, `AF-C`, `DMF`, `MF` |
+        | `postviewImageSize` | `Original`, `2M` |
+        | `selfTimer` | `0`, `2`, `10` |
+        | `shootMode` | `still`, `movie` |
+        | `flashMode` | `off`, `auto`, `on` |
+      operationId: setSetting
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [exposureMode, fNumber, shutterSpeed, isoSpeedRate, exposureCompensation, whiteBalance, focusMode, postviewImageSize, selfTimer, shootMode, flashMode]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettingValue" }
+            examples:
+              shutter: { summary: shutterSpeed, value: { value: "1/250" } }
+              aperture: { summary: fNumber, value: { value: "8.0" } }
+              iso: { summary: isoSpeedRate, value: { value: "400" } }
+              mode: { summary: exposureMode, value: { value: Manual } }
+              ev: { summary: exposureCompensation, value: { value: -3 } }
+      responses:
+        "204": { description: Setting applied. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/CameraRefused" }
+
+  /api/timelapse:
+    get:
+      tags: [Timelapse]
+      summary: Session state
+      description: State of the running (or most recent) interval session and its render.
+      operationId: getTimelapse
+      responses:
+        "200":
+          description: Session state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimelapseState" }
+    post:
+      tags: [Timelapse]
+      summary: Start a session
+      description: |
+        Starts interval capture in the background. Frames go to
+        `timelapse-YYYYMMDD-HHMMSS/` inside the media directory. Set `count`,
+        `durationSeconds`, both (whichever comes first), or neither (runs until
+        stopped). A single failed shot does not end the session; three in a row do.
+      operationId: startTimelapse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TimelapseRequest" }
+            examples:
+              sunset: { summary: 300 frames every 5 s (~10 s of video at 30 fps), value: { intervalSeconds: 5, count: 300 } }
+              hour: { summary: One hour, one frame every 10 s, value: { intervalSeconds: 10, durationSeconds: 3600 } }
+      responses:
+        "202":
+          description: Session started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimelapseState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Timelapse]
+      summary: Stop the session
+      description: Stops capture after the in-flight shot. Frames already captured are kept.
+      operationId: stopTimelapse
+      responses:
+        "200":
+          description: Session state after stopping.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimelapseState" }
+  /api/timelapse/render:
+    post:
+      tags: [Timelapse]
+      summary: Render the session to video
+      description: |
+        Encodes the latest session into `<session>.mp4` with FFmpeg, the same
+        pipeline as `focal lapse`. Runs in the background; poll `GET /api/timelapse`
+        until `render.running` is false.
+      operationId: renderTimelapse
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RenderRequest" }
+      responses:
+        "202":
+          description: Render started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimelapseState" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/media:
+    get:
+      tags: [Media]
+      summary: List photos and videos
+      description: Newest first. Files are served under `/media/<path>`.
+      operationId: listMedia
+      responses:
+        "200":
+          description: Media items.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Media" }
+
+  /api/rpc/methods:
+    get:
+      tags: [Raw Camera API]
+      summary: Methods available now
+      description: |
+        `getAvailableApiList`: the camera-service methods the body accepts in its
+        current state, plus the setting names accepted by `PUT /api/settings/{name}`.
+      operationId: listMethods
+      responses:
+        "200":
+          description: Available methods.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MethodList" }
+        "503": { $ref: "#/components/responses/NotConnected" }
+  /api/rpc/{service}:
+    post:
+      tags: [Raw Camera API]
+      summary: Call any Camera Remote API method
+      description: |
+        Forwards a JSON-RPC call to the camera unchanged. Most methods live on the
+        `camera` service. Camera errors come back with HTTP 200 and the camera's
+        own `error` envelope, exactly as the camera sent them.
+
+        Pick an example below to try common methods.
+      operationId: rpc
+      parameters:
+        - name: service
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [camera, system, avContent, guide]
+            default: camera
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RPCRequest" }
+            examples:
+              getAvailableApiList: { value: { method: getAvailableApiList, params: [], version: "1.0" } }
+              getApplicationInfo: { value: { method: getApplicationInfo, params: [], version: "1.0" } }
+              getEvent: { summary: "getEvent (no long-poll)", value: { method: getEvent, params: [false], version: "1.0" } }
+              getVersions: { value: { method: getVersions, params: [], version: "1.0" } }
+              startRecMode: { value: { method: startRecMode, params: [], version: "1.0" } }
+              actTakePicture: { value: { method: actTakePicture, params: [], version: "1.0" } }
+              getAvailableShutterSpeed: { value: { method: getAvailableShutterSpeed, params: [], version: "1.0" } }
+              setShutterSpeed: { value: { method: setShutterSpeed, params: ["1/250"], version: "1.0" } }
+              getAvailableFNumber: { value: { method: getAvailableFNumber, params: [], version: "1.0" } }
+              setFNumber: { value: { method: setFNumber, params: ["8.0"], version: "1.0" } }
+              getAvailableIsoSpeedRate: { value: { method: getAvailableIsoSpeedRate, params: [], version: "1.0" } }
+              setExposureCompensation: { value: { method: setExposureCompensation, params: [-3], version: "1.0" } }
+              getAvailableWhiteBalance: { value: { method: getAvailableWhiteBalance, params: [], version: "1.0" } }
+              setWhiteBalance: { value: { method: setWhiteBalance, params: ["Daylight", false, -1], version: "1.0" } }
+              getAvailablePostviewImageSize: { value: { method: getAvailablePostviewImageSize, params: [], version: "1.0" } }
+              actZoom: { value: { method: actZoom, params: ["in", "1shot"], version: "1.0" } }
+              setSelfTimer: { value: { method: setSelfTimer, params: [2], version: "1.0" } }
+      responses:
+        "200":
+          description: The camera's response envelope (result or error).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RPCResponse" }
+              examples:
+                result: { value: { result: [0] } }
+                error: { value: { error: [1, "Not Available Now"] } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/CameraUnreachable" }
+        "503": { $ref: "#/components/responses/NotConnected" }
+
+components:
+  responses:
+    BadRequest:
+      description: The request was malformed or the camera rejected the value (camera code 3).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Unknown setting or resource.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Another session or render is in progress, or there is nothing to render.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    CameraRefused:
+      description: The camera refused the command in its current state (e.g. a setting the exposure mode does not allow).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "camera rejected setShutterSpeed: Not Available Now (code 1)", cameraCode: 1 }
+    NotConnected:
+      description: No camera could be found. Join the camera's Wi-Fi and open Smart Remote on the camera.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    CameraUnreachable:
+      description: The camera stopped answering (Wi-Fi dropped or the camera turned off).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        cameraCode:
+          type: integer
+          description: Camera Remote API error code, when the camera itself refused.
+    Device:
+      type: object
+      properties:
+        friendlyName: { type: string, example: ILCE-5000 }
+        baseUrl: { type: string, example: "http://192.168.122.1:8080/sony" }
+        services:
+          type: array
+          items: { type: string }
+          example: [guide, camera, system]
+    CameraInfo:
+      type: object
+      properties:
+        connected: { type: boolean }
+        device: { $ref: "#/components/schemas/Device" }
+        error: { type: string, description: Last connection error, if any. }
+    Choice:
+      type: object
+      properties:
+        current: { type: string, example: "1/125" }
+        candidates:
+          type: array
+          description: Values accepted right now.
+          items: { type: string }
+          example: ["1/60", "1/125", "1/250"]
+    Status:
+      type: object
+      properties:
+        cameraStatus:
+          type: string
+          example: IDLE
+          description: IDLE, StillCapturing, StillSaving, NotReady, MovieRecording, …
+        availableApis:
+          type: array
+          items: { type: string }
+        liveviewActive: { type: boolean }
+        zoomPosition: { type: integer, minimum: 0, maximum: 100 }
+        focusStatus: { type: string, example: Focused }
+        shootMode: { $ref: "#/components/schemas/Choice" }
+        exposureMode: { $ref: "#/components/schemas/Choice" }
+        fNumber: { $ref: "#/components/schemas/Choice" }
+        shutterSpeed: { $ref: "#/components/schemas/Choice" }
+        isoSpeedRate: { $ref: "#/components/schemas/Choice" }
+        whiteBalance: { $ref: "#/components/schemas/Choice" }
+        focusMode: { $ref: "#/components/schemas/Choice" }
+        flashMode: { $ref: "#/components/schemas/Choice" }
+        selfTimer: { $ref: "#/components/schemas/Choice" }
+        postviewImageSize: { $ref: "#/components/schemas/Choice" }
+        exposureCompensation:
+          type: object
+          description: EV = current × step.
+          properties:
+            current: { type: integer, example: -3 }
+            min: { type: integer, example: -9 }
+            max: { type: integer, example: 9 }
+            step: { type: number, example: 0.3333 }
+        battery:
+          type: object
+          properties:
+            percent: { type: integer, description: "0–100, or -1 if unknown" }
+            status: { type: string }
+        storage:
+          type: object
+          properties:
+            id: { type: string, example: Memory Card 1 }
+            remainingShots: { type: integer, description: "-1 if unknown" }
+    SettingValue:
+      type: object
+      required: [value]
+      properties:
+        value:
+          oneOf:
+            - type: string
+            - type: number
+          description: A value from the setting's candidates. Numbers may be sent unquoted.
+    ZoomRequest:
+      type: object
+      required: [direction]
+      properties:
+        direction: { type: string, enum: [in, out] }
+        movement: { type: string, enum: [1shot, start, stop], default: 1shot }
+    TouchRequest:
+      type: object
+      required: [x, y]
+      properties:
+        x: { type: number, minimum: 0, maximum: 100, description: Percent from the left edge. }
+        y: { type: number, minimum: 0, maximum: 100, description: Percent from the top edge. }
+    Media:
+      type: object
+      properties:
+        path: { type: string, example: timelapse-20261030-181500/frame_00001.jpg }
+        url: { type: string, example: /media/timelapse-20261030-181500/frame_00001.jpg }
+        kind: { type: string, enum: [photo, video] }
+        session: { type: string, description: Timelapse session folder, if any. }
+        size: { type: integer, description: Bytes. }
+        modTime: { type: string, format: date-time }
+    TimelapseRequest:
+      type: object
+      required: [intervalSeconds]
+      properties:
+        intervalSeconds: { type: number, minimum: 0.5, example: 5 }
+        count: { type: integer, minimum: 0, description: Frames to capture; 0 = no limit. }
+        durationSeconds: { type: number, minimum: 0, description: Session length; 0 = no limit. }
+    RenderRequest:
+      type: object
+      properties:
+        fps: { type: integer, minimum: 1, maximum: 120, default: 30 }
+        maxHeight: { type: integer, default: 1080, description: Output height cap in pixels. }
+    TimelapseState:
+      type: object
+      properties:
+        running: { type: boolean }
+        session: { type: string }
+        intervalSeconds: { type: number }
+        total: { type: integer, description: Planned frames; 0 = unbounded. }
+        captured: { type: integer }
+        failed: { type: integer }
+        startedAt: { type: string, format: date-time }
+        nextShotAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        lastFrame: { $ref: "#/components/schemas/Media" }
+        warning: { type: string }
+        error: { type: string }
+        render:
+          type: object
+          properties:
+            running: { type: boolean }
+            fps: { type: integer }
+            output: { $ref: "#/components/schemas/Media" }
+            error: { type: string }
+    MethodList:
+      type: object
+      properties:
+        available:
+          type: array
+          items: { type: string }
+          example: [getAvailableApiList, actTakePicture, startLiveview, actZoom, setExposureMode]
+        settings:
+          type: array
+          items: { type: string }
+    RPCRequest:
+      type: object
+      required: [method]
+      properties:
+        method: { type: string, example: getAvailableApiList }
+        params:
+          type: array
+          items: {}
+          default: []
+        version: { type: string, default: "1.0" }
+    RPCResponse:
+      type: object
+      properties:
+        result:
+          type: array
+          items: {}
+        error:
+          type: array
+          items: {}
+          description: "[code, message]"

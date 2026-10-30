@@ -15,7 +15,7 @@ import (
 var version = "dev"
 
 // rootCmd is the base `focal` command. It does no work itself; functionality
-// lives in subcommands such as `focal lapse`.
+// lives in subcommands such as `focal lapse`, `focal shoot` and `focal serve`.
 var rootCmd = &cobra.Command{
 	Use:     "focal",
 	Short:   "focal converts photo sequences into timelapses",
@@ -25,7 +25,11 @@ video by wrapping FFmpeg.
 
 It sorts images chronologically using EXIF metadata (falling back to file
 modification time), warns about inconsistent aspect ratios, and downloads a
-static FFmpeg build automatically on macOS when one is not already installed.`,
+static FFmpeg build automatically on macOS when one is not already installed.
+
+With a Wi-Fi capable Sony camera (a5000, a6000, NEX, RX100, QX…), "focal shoot"
+captures the sequence itself and "focal serve" opens a browser studio with
+live view and remote control.`,
 }
 
 // Execute runs the root command and exits non-zero on failure. It is the single
@@ -39,5 +43,7 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(newLapseCmd())
+	rootCmd.AddCommand(newShootCmd())
+	rootCmd.AddCommand(newServeCmd())
 	rootCmd.AddCommand(newVersionCmd())
 }
